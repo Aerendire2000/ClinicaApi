@@ -1,46 +1,31 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ClinicaApi.Data;
+using ClinicaApi.Data.Repositories;
 using ClinicaApi.DTOs;
 using ClinicaApi.Models;
 
 namespace ClinicaApi.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")] // → api/citas
+    [Route("api/[controller]")]          // → api/citas
     public class CitasController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ApplicationDbContext _context;          // EF Core: escrituras
+        private readonly IClinicaLecturaRepository _lectura;     // Dapper: lecturas
 
-        public CitasController(ApplicationDbContext context)
+        public CitasController(
+            ApplicationDbContext context, IClinicaLecturaRepository lectura)
         {
             _context = context;
+            _lectura = lectura;
         }
 
-        // GET api/citas  o  api/citas?estado=Pendiente
-        // (Citas JOIN Pacientes JOIN Medicos JOIN Especialidades)
+        // GET api/citas   o   api/citas?estado=Pendiente   (Dapper → DTO de lectura)
         [HttpGet]
-        public async Task<IActionResult> GetAll(string? estado)
+        public async Task<ActionResult<IEnumerable<CitaLecturaDto>>> GetAll(string? estado)
         {
-            var consulta = _context.Citas.AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(estado))
-                consulta = consulta.Where(c => c.Estado == estado);
-
-            var citas = await consulta
-                .OrderBy(c => c.FechaHora)
-                .Select(c => new
-                {
-                    c.Id,
-                    c.FechaHora,
-                    c.Estado,
-                    Paciente = c.Paciente!.Nombre,
-                    Medico = c.Medico!.Nombre + " " + c.Medico.Apellidos,
-                    Especialidad = c.Medico.Especialidad!.Nombre
-                })
-                .ToListAsync();
-
-            return Ok(citas);
+            return Ok(await _lectura.ObtenerCitasAsync(estado));
         }
 
         // GET api/citas/1
@@ -48,9 +33,7 @@ namespace ClinicaApi.Controllers
         public async Task<ActionResult<Cita>> GetById(int id)
         {
             var cita = await _context.Citas.FindAsync(id);
-            if (cita is null)
-                return NotFound($"No existe la cita con Id {id}.");
-
+            if (cita is null) return NotFound($"No existe la cita con Id {id}.");
             return cita;
         }
 
@@ -60,7 +43,6 @@ namespace ClinicaApi.Controllers
         {
             if (!await _context.Medicos.AnyAsync(m => m.Id == dto.MedicoId))
                 return BadRequest($"No existe el médico con Id {dto.MedicoId}.");
-
             if (!await _context.Pacientes.AnyAsync(p => p.Id == dto.PacienteId))
                 return BadRequest($"No existe el paciente con Id {dto.PacienteId}.");
 
@@ -83,12 +65,10 @@ namespace ClinicaApi.Controllers
         public async Task<IActionResult> Update(int id, [FromBody] CitaDto dto)
         {
             var cita = await _context.Citas.FindAsync(id);
-            if (cita is null)
-                return NotFound($"No existe la cita con Id {id}.");
+            if (cita is null) return NotFound($"No existe la cita con Id {id}.");
 
             if (!await _context.Medicos.AnyAsync(m => m.Id == dto.MedicoId))
                 return BadRequest($"No existe el médico con Id {dto.MedicoId}.");
-
             if (!await _context.Pacientes.AnyAsync(p => p.Id == dto.PacienteId))
                 return BadRequest($"No existe el paciente con Id {dto.PacienteId}.");
 
@@ -101,16 +81,14 @@ namespace ClinicaApi.Controllers
             return NoContent();
         }
 
-        // PATCH api/citas/1 (ej. solo cambiar el estado o reprogramar la hora)
+        // PATCH api/citas/1   (ej. solo cambiar el estado o reprogramar la hora)
         [HttpPatch("{id:int}")]
         public async Task<IActionResult> Patch(int id, [FromBody] CitaPatchDto dto)
         {
             var cita = await _context.Citas.FindAsync(id);
-            if (cita is null)
-                return NotFound($"No existe la cita con Id {id}.");
+            if (cita is null) return NotFound($"No existe la cita con Id {id}.");
 
-            if (dto.MedicoId is not null &&
-                !await _context.Medicos.AnyAsync(m => m.Id == dto.MedicoId))
+            if (dto.MedicoId is not null && !await _context.Medicos.AnyAsync(m => m.Id == dto.MedicoId))
                 return BadRequest($"No existe el médico con Id {dto.MedicoId}.");
 
             if (dto.FechaHora is not null) cita.FechaHora = dto.FechaHora.Value;
@@ -126,8 +104,7 @@ namespace ClinicaApi.Controllers
         public async Task<IActionResult> Delete(int id)
         {
             var cita = await _context.Citas.FindAsync(id);
-            if (cita is null)
-                return NotFound($"No existe la cita con Id {id}.");
+            if (cita is null) return NotFound($"No existe la cita con Id {id}.");
 
             _context.Citas.Remove(cita);
             await _context.SaveChangesAsync();

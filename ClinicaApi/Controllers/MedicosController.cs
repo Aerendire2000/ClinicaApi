@@ -1,39 +1,31 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ClinicaApi.Data;
+using ClinicaApi.Data.Repositories;
 using ClinicaApi.DTOs;
 using ClinicaApi.Models;
 
 namespace ClinicaApi.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")] // → api/medicos
+    [Route("api/[controller]")]          // → api/medicos
     public class MedicosController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ApplicationDbContext _context;          // EF Core: escrituras
+        private readonly IClinicaLecturaRepository _lectura;     // Dapper: lecturas
 
-        public MedicosController(ApplicationDbContext context)
+        public MedicosController(
+            ApplicationDbContext context, IClinicaLecturaRepository lectura)
         {
             _context = context;
+            _lectura = lectura;
         }
 
-        // GET api/medicos (Medicos JOIN Especialidades: devuelve el nombre de la especialidad)
+        // GET api/medicos   o   api/medicos?especialidadId=1   (Dapper → DTO de lectura)
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<ActionResult<IEnumerable<MedicoLecturaDto>>> GetAll(int? especialidadId)
         {
-            var medicos = await _context.Medicos
-                .Select(m => new
-                {
-                    m.Id,
-                    m.Nombre,
-                    m.Apellidos,
-                    m.NumeroColegiatura,
-                    m.EspecialidadId,
-                    Especialidad = m.Especialidad!.Nombre
-                })
-                .ToListAsync();
-
-            return Ok(medicos);
+            return Ok(await _lectura.ObtenerMedicosAsync(especialidadId));
         }
 
         // GET api/medicos/1
@@ -41,9 +33,7 @@ namespace ClinicaApi.Controllers
         public async Task<ActionResult<Medico>> GetById(int id)
         {
             var medico = await _context.Medicos.FindAsync(id);
-            if (medico is null)
-                return NotFound($"No existe el médico con Id {id}.");
-
+            if (medico is null) return NotFound($"No existe el médico con Id {id}.");
             return medico;
         }
 
@@ -74,8 +64,7 @@ namespace ClinicaApi.Controllers
         public async Task<IActionResult> Update(int id, [FromBody] MedicoDto dto)
         {
             var medico = await _context.Medicos.FindAsync(id);
-            if (medico is null)
-                return NotFound($"No existe el médico con Id {id}.");
+            if (medico is null) return NotFound($"No existe el médico con Id {id}.");
 
             if (!await _context.Especialidades.AnyAsync(e => e.Id == dto.EspecialidadId))
                 return BadRequest($"No existe la especialidad con Id {dto.EspecialidadId}.");
@@ -94,11 +83,9 @@ namespace ClinicaApi.Controllers
         public async Task<IActionResult> Patch(int id, [FromBody] MedicoPatchDto dto)
         {
             var medico = await _context.Medicos.FindAsync(id);
-            if (medico is null)
-                return NotFound($"No existe el médico con Id {id}.");
+            if (medico is null) return NotFound($"No existe el médico con Id {id}.");
 
-            if (dto.EspecialidadId is not null &&
-                !await _context.Especialidades.AnyAsync(e => e.Id == dto.EspecialidadId))
+            if (dto.EspecialidadId is not null && !await _context.Especialidades.AnyAsync(e => e.Id == dto.EspecialidadId))
                 return BadRequest($"No existe la especialidad con Id {dto.EspecialidadId}.");
 
             if (dto.Nombre is not null) medico.Nombre = dto.Nombre;
@@ -115,8 +102,7 @@ namespace ClinicaApi.Controllers
         public async Task<IActionResult> Delete(int id)
         {
             var medico = await _context.Medicos.FindAsync(id);
-            if (medico is null)
-                return NotFound($"No existe el médico con Id {id}.");
+            if (medico is null) return NotFound($"No existe el médico con Id {id}.");
 
             if (await _context.Citas.AnyAsync(c => c.MedicoId == id))
                 return Conflict("No se puede eliminar: el médico tiene citas registradas.");

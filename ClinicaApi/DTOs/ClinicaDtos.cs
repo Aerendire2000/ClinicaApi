@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace ClinicaApi.DTOs
 {
@@ -50,7 +50,8 @@ namespace ClinicaApi.DTOs
         [Required, MaxLength(100)]
         public string Nombre { get; set; } = string.Empty;
 
-        [Required, StringLength(8, MinimumLength = 8, ErrorMessage = "El DNI debe tener 8 dígitos.")]
+        [Required(ErrorMessage = "El DNI es obligatorio.")]
+        [RegularExpression(@"^[0-9]{8}$", ErrorMessage = "El DNI debe tener 8 números exactos.")]
         public string DNI { get; set; } = string.Empty;
     }
 
@@ -59,7 +60,7 @@ namespace ClinicaApi.DTOs
         [MaxLength(100)]
         public string? Nombre { get; set; }
 
-        [StringLength(8, MinimumLength = 8, ErrorMessage = "El DNI debe tener 8 dígitos.")]
+        [RegularExpression(@"^[0-9]{8}$", ErrorMessage = "El DNI debe tener 8 números exactos.")]
         public string? DNI { get; set; }
     }
 
