@@ -1,0 +1,137 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using ClinicaApi.Data;
+using ClinicaApi.DTOs;
+using ClinicaApi.Models;
+
+namespace ClinicaApi.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")] // → api/citas
+    public class CitasController : ControllerBase
+    {
+        private readonly ApplicationDbContext _context;
+
+        public CitasController(ApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET api/citas  o  api/citas?estado=Pendiente
+        // (Citas JOIN Pacientes JOIN Medicos JOIN Especialidades)
+        [HttpGet]
+        public async Task<IActionResult> GetAll(string? estado)
+        {
+            var consulta = _context.Citas.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(estado))
+                consulta = consulta.Where(c => c.Estado == estado);
+
+            var citas = await consulta
+                .OrderBy(c => c.FechaHora)
+                .Select(c => new
+                {
+                    c.Id,
+                    c.FechaHora,
+                    c.Estado,
+                    Paciente = c.Paciente!.Nombre,
+                    Medico = c.Medico!.Nombre + " " + c.Medico.Apellidos,
+                    Especialidad = c.Medico.Especialidad!.Nombre
+                })
+                .ToListAsync();
+
+            return Ok(citas);
+        }
+
+        // GET api/citas/1
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<Cita>> GetById(int id)
+        {
+            var cita = await _context.Citas.FindAsync(id);
+            if (cita is null)
+                return NotFound($"No existe la cita con Id {id}.");
+
+            return cita;
+        }
+
+        // POST api/citas
+        [HttpPost]
+        public async Task<ActionResult<Cita>> Create([FromBody] CitaDto dto)
+        {
+            if (!await _context.Medicos.AnyAsync(m => m.Id == dto.MedicoId))
+                return BadRequest($"No existe el médico con Id {dto.MedicoId}.");
+
+            if (!await _context.Pacientes.AnyAsync(p => p.Id == dto.PacienteId))
+                return BadRequest($"No existe el paciente con Id {dto.PacienteId}.");
+
+            var cita = new Cita
+            {
+                FechaHora = dto.FechaHora,
+                Estado = dto.Estado,
+                MedicoId = dto.MedicoId,
+                PacienteId = dto.PacienteId
+            };
+
+            _context.Citas.Add(cita);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetById), new { id = cita.Id }, cita);
+        }
+
+        // PUT api/citas/1
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> Update(int id, [FromBody] CitaDto dto)
+        {
+            var cita = await _context.Citas.FindAsync(id);
+            if (cita is null)
+                return NotFound($"No existe la cita con Id {id}.");
+
+            if (!await _context.Medicos.AnyAsync(m => m.Id == dto.MedicoId))
+                return BadRequest($"No existe el médico con Id {dto.MedicoId}.");
+
+            if (!await _context.Pacientes.AnyAsync(p => p.Id == dto.PacienteId))
+                return BadRequest($"No existe el paciente con Id {dto.PacienteId}.");
+
+            cita.FechaHora = dto.FechaHora;
+            cita.Estado = dto.Estado;
+            cita.MedicoId = dto.MedicoId;
+            cita.PacienteId = dto.PacienteId;
+
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // PATCH api/citas/1 (ej. solo cambiar el estado o reprogramar la hora)
+        [HttpPatch("{id:int}")]
+        public async Task<IActionResult> Patch(int id, [FromBody] CitaPatchDto dto)
+        {
+            var cita = await _context.Citas.FindAsync(id);
+            if (cita is null)
+                return NotFound($"No existe la cita con Id {id}.");
+
+            if (dto.MedicoId is not null &&
+                !await _context.Medicos.AnyAsync(m => m.Id == dto.MedicoId))
+                return BadRequest($"No existe el médico con Id {dto.MedicoId}.");
+
+            if (dto.FechaHora is not null) cita.FechaHora = dto.FechaHora.Value;
+            if (dto.Estado is not null) cita.Estado = dto.Estado;
+            if (dto.MedicoId is not null) cita.MedicoId = dto.MedicoId.Value;
+
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // DELETE api/citas/1
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var cita = await _context.Citas.FindAsync(id);
+            if (cita is null)
+                return NotFound($"No existe la cita con Id {id}.");
+
+            _context.Citas.Remove(cita);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+    }
+}
