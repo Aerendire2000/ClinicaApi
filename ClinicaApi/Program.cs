@@ -8,8 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(opciones =>
     opciones.UseSqlServer(builder.Configuration.GetConnectionString("ConexionSQL")));
 
-// Dapper: repositorio de lecturas (CQRS Lite)
-builder.Services.AddScoped<IClinicaLecturaRepository, ClinicaLecturaRepository>();
+// Dapper: repositorios de solo lectura (interfaz → implementación)
+builder.Services.AddScoped<IClinicaLecturaRepository, ClinicaLecturaRepository>();   // sesión 8
+builder.Services.AddScoped<IReportesRepository, ReportesRepository>();               // sesión 9
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
